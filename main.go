@@ -2,7 +2,10 @@ package main
 
 import (
 	"archive/zip"
+	"io"
 	"log"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -146,6 +149,7 @@ func main() {
 	mw := new(walk.MainWindow)
 	var tv *walk.TreeView
 	var model *ZipTreeModel
+	var currentZipPath string
 
 	// メインウィンドウを設定
 	if err := (MainWindow{
@@ -159,6 +163,80 @@ func main() {
 				AssignTo:           &tv,
 				StretchFactor:      10, // ウィンドウサイズに合わせて拡大
 				AlwaysConsumeSpace: true,
+				OnItemActivated: func() {
+					// Get the selected item
+					item := tv.CurrentItem()
+					// Get the ZipTreeItem
+					zipItem, ok := item.(*ZipTreeItem)
+					if !ok || zipItem.isDir {
+						// Ignore if it's not a ZipTreeItem or if it's a directory
+						return
+					}
+
+					// Extract the file to a temporary location
+					reader, err := zip.OpenReader(currentZipPath)
+					if err != nil {
+						walk.MsgBox(mw, "エラー", "ZIPファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
+						return
+					}
+					defer reader.Close()
+
+					// Find the file in the ZIP
+					var zipFile *zip.File
+					for _, f := range reader.File {
+						if f.Name == zipItem.path {
+							zipFile = f
+							break
+						}
+					}
+
+					if zipFile == nil {
+						walk.MsgBox(mw, "エラー", "ファイルが見つかりませんでした: "+zipItem.path, walk.MsgBoxIconError)
+						return
+					}
+
+					// Create a temporary directory
+					tempDir, err := os.MkdirTemp("", "zip-editor-")
+					if err != nil {
+						walk.MsgBox(mw, "エラー", "一時ディレクトリを作成できませんでした: "+err.Error(), walk.MsgBoxIconError)
+						return
+					}
+
+					// Create the full path for the extracted file
+					tempFilePath := filepath.Join(tempDir, zipItem.name)
+
+					// Extract the file
+					srcFile, err := zipFile.Open()
+					if err != nil {
+						walk.MsgBox(mw, "エラー", "ファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
+						return
+					}
+					defer srcFile.Close()
+
+					destFile, err := os.Create(tempFilePath)
+					if err != nil {
+						walk.MsgBox(mw, "エラー", "一時ファイルを作成できませんでした: "+err.Error(), walk.MsgBoxIconError)
+						return
+					}
+					defer destFile.Close()
+
+					_, err = io.Copy(destFile, srcFile)
+					if err != nil {
+						walk.MsgBox(mw, "エラー", "ファイルを抽出できませんでした: "+err.Error(), walk.MsgBoxIconError)
+						return
+					}
+
+					// Close the file before opening it
+					destFile.Close()
+
+					// Open the file with the default application
+					cmd := exec.Command("cmd", "/c", "start", "", tempFilePath)
+					err = cmd.Start()
+					if err != nil {
+						walk.MsgBox(mw, "エラー", "ファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
+						return
+					}
+				},
 			},
 			// ボタンエリア
 			Composite{
@@ -190,12 +268,11 @@ func main() {
 					continue
 				}
 
-   	// モデルを設定
+				// 現在のZIPファイルパスを保存
+				currentZipPath = file
+
 				model = newModel
 				tv.SetModel(model)
-
-				// チェックボックスを有効にする
-				// チェックボックスを有効にするコードをここに追加
 
 				// ウィンドウタイトルを更新
 				mw.SetTitle("ZIP ファイルビューア - " + filepath.Base(file))
