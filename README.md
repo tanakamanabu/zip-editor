@@ -1,62 +1,62 @@
-# Simple Walk GUI Application
+# シンプルなWalk GUIアプリケーション
 
-A simple Windows GUI application created with [Walk](https://github.com/lxn/walk), a Windows GUI toolkit for Go.
+[Walk](https://github.com/lxn/walk)を使用して作成したシンプルなWindows GUIアプリケーションです。Walkは、Go言語用のWindows GUIツールキットです。
 
-## Features
+## 機能
 
-- Displays a window with a button
-- Shows a message box when the button is clicked
+- ボタン付きのウィンドウを表示
+- ボタンをクリックするとメッセージボックスを表示
 
-## Requirements
+## 必要条件
 
-- Go 1.24 or later
-- Windows operating system (Walk is Windows-only)
-- GCC compiler (for CGo)
+- Go 1.24以降
+- Windowsオペレーティングシステム（Walkはウィンドウズ専用です）
+- GCCコンパイラ（CGo用）
 
-## Installation
+## インストール方法
 
-1. Clone this repository:
+1. このリポジトリをクローンします：
    ```
    git clone https://github.com/yourusername/zip-editor.git
    cd zip-editor
    ```
 
-2. Install dependencies:
+2. 依存関係をインストールします：
    ```
    go mod tidy
    ```
 
-## Building and Running
+## ビルドと実行
 
-### Regular Build
+### 通常のビルド
 
 ```
 go build
 ```
 
-Then run the executable:
+その後、実行ファイルを実行します：
 
 ```
 zip-editor.exe
 ```
 
-### Building with manifest for better DPI support
+### より良いDPIサポートのためのマニフェストを使用したビルド
 
-For better DPI scaling support, you can build with the rsrc tool:
+より良いDPIスケーリングサポートのために、rsrcツールを使用してビルドできます：
 
-1. Install rsrc:
+1. rsrcをインストールします：
    ```
    go install github.com/akavel/rsrc@latest
    ```
 
-2. Create a manifest file (already included in this repo)
+2. マニフェストファイルを作成します（このリポジトリにはすでに含まれています）
 
-3. Build with rsrc:
+3. rsrcでビルドします：
    ```
    rsrc -manifest zip-editor.manifest -o rsrc.syso
    go build
    ```
 
-## License
+## ライセンス
 
-[MIT License](LICENSE)
+[MITライセンス](LICENSE)

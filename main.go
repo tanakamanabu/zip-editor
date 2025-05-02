@@ -8,20 +8,20 @@ import (
 )
 
 func main() {
-	// Create a new main window
+	// メインウィンドウを作成
 	mw := new(walk.MainWindow)
 
-	// Configure the main window
+	// メインウィンドウを設定
 	if err := (MainWindow{
 		AssignTo: &mw,
-		Title:    "Simple Walk GUI Application",
+		Title:    "シンプルなWalk GUIアプリケーション",
 		MinSize:  Size{Width: 500, Height: 300},
 		Layout:   VBox{},
 		Children: []Widget{
 			PushButton{
-				Text: "Click Me!",
+				Text: "クリックしてください！",
 				OnClicked: func() {
-					walk.MsgBox(mw, "Message", "Hello, Walk!", walk.MsgBoxIconInformation)
+					walk.MsgBox(mw, "メッセージ", "こんにちは、Walk！", walk.MsgBoxIconInformation)
 				},
 			},
 		},
@@ -29,7 +29,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Show the window and start the message loop
+	// ウィンドウを表示してメッセージループを開始
 	mw.Show()
 	mw.Run()
 }
