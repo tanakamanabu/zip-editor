@@ -20,7 +20,7 @@ func CreateMainWindow() {
 
 	// 現在のZIPファイルパスとモデル
 	var currentZipPath string
-	var zipModel = model.CreateEmptyZipTreeModel()
+	var zipModel *model.ZipTreeModel
 
 	// メインウィンドウを設定
 	if err := (MainWindow{
@@ -39,7 +39,6 @@ func CreateMainWindow() {
 						AssignTo:           &tv,
 						StretchFactor:      5, // 左右の比率
 						AlwaysConsumeSpace: true,
-						Model:              zipModel, // 初期状態ではnilになります
 					},
 					// 右側：テキストエディット（ファイル一覧表示用）
 					TextEdit{
