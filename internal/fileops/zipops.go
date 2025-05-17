@@ -1,4 +1,4 @@
-package main
+package fileops
 
 import (
 	"archive/zip"
@@ -8,36 +8,36 @@ import (
 	"github.com/lxn/walk"
 )
 
-// UpdateFileList updates the list of files in the specified directory
-func updateFileList(te *walk.TextEdit, zipPath string, dirPath string) error {
+// UpdateFileList は指定されたディレクトリ内のファイル一覧を更新します
+func UpdateFileList(te *walk.TextEdit, zipPath string, dirPath string) error {
 	if zipPath == "" {
 		return nil
 	}
 
-	// Open the ZIP file
+	// ZIPファイルを開く
 	reader, err := zip.OpenReader(zipPath)
 	if err != nil {
 		return err
 	}
 	defer reader.Close()
 
-	// Clear the text edit
+	// テキストエディットをクリア
 	te.SetText("")
 
-	// Process each file in the ZIP
+	// ZIPの各ファイルを処理
 	var fileList strings.Builder
 	for _, file := range reader.File {
-		// Skip directories
+		// ディレクトリはスキップ
 		if strings.HasSuffix(file.Name, "/") {
 			continue
 		}
 
-		// Convert the file path to UTF-8
-		path := autoDetectEncoding(file.Name)
+		// ファイルパスをUTF-8に変換
+		path := AutoDetectEncoding(file.Name)
 		dir := filepath.Dir(path)
 		name := filepath.Base(path)
 
-		// Normalize directory path for comparison
+		// 比較のためにディレクトリパスを正規化
 		dir = strings.TrimSuffix(dir, "/")
 		if dir == "." {
 			dir = ""
@@ -45,15 +45,15 @@ func updateFileList(te *walk.TextEdit, zipPath string, dirPath string) error {
 			dir += "/"
 		}
 
-		// Check if this file is in the current directory
+		// このファイルが現在のディレクトリにあるかチェック
 		if dir == dirPath {
-			// Add the file to the list
+			// ファイルをリストに追加
 			fileList.WriteString(name)
 			fileList.WriteString("\r\n")
 		}
 	}
 
-	// Update the text edit
+	// テキストエディットを更新
 	te.SetText(fileList.String())
 
 	return nil
