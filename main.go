@@ -12,6 +12,7 @@ import (
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
+	"github.com/lxn/win"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/japanese"
@@ -88,12 +89,23 @@ type ZipTreeItem struct {
 	deleteFlag bool
 }
 
+// SetDeleteFlagRecursively sets the delete flag for this item and all its children
+func (item *ZipTreeItem) SetDeleteFlagRecursively(flag bool, model *ZipTreeModel) {
+	item.deleteFlag = flag
+	model.PublishItemChanged(item)
+
+	// Recursively set the flag for all children
+	for _, child := range item.children {
+		child.SetDeleteFlagRecursively(flag, model)
+	}
+}
+
 // Text returns the display text for the item
 func (item *ZipTreeItem) Text() string {
 	if item.deleteFlag {
-		return "☑ " + item.name
+		return item.name + " [削除予定]"
 	}
-	return "◻ " + item.name
+	return item.name
 }
 
 // Parent returns the parent item
@@ -122,7 +134,7 @@ func (item *ZipTreeItem) Image() interface{} {
 	return 1 // File icon
 }
 
-// ZipTreeModel represents the model for the ZIP file tree
+// ZipTreeModel represents the tree model for the ZIP file
 type ZipTreeModel struct {
 	walk.TreeModelBase
 	rootItem *ZipTreeItem
@@ -172,7 +184,7 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 		// Split the path into components and automatically detect encoding
 		// This will try various encodings (Shift-JIS, EUC-JP, UTF-8, etc.) and convert to UTF-8
 		path := autoDetectEncoding(file.Name)
-		dir, name := filepath.Split(path)
+		dir := filepath.Dir(path)
 		dir = strings.TrimSuffix(dir, "/")
 
 		// Ensure all parent directories exist
@@ -201,134 +213,236 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 			parentPath = currentPath
 		}
 
-		// Create file item
-		fileItem := &ZipTreeItem{
-			name:   name,
-			path:   path,
-			parent: parentItem,
-			isDir:  false,
-		}
-		parentItem.children = append(parentItem.children, fileItem)
+		// Skip adding file items to the tree to show only folders
+		// File items are not added to parentItem.children
 	}
 
 	return &ZipTreeModel{rootItem: rootItem}, nil
+}
+
+// UpdateFileList updates the list of files in the specified directory
+func updateFileList(te *walk.TextEdit, zipPath string, dirPath string) error {
+	if zipPath == "" {
+		return nil
+	}
+
+	// Open the ZIP file
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	// Clear the text edit
+	te.SetText("")
+
+	// Process each file in the ZIP
+	var fileList strings.Builder
+	for _, file := range reader.File {
+		// Skip directories
+		if strings.HasSuffix(file.Name, "/") {
+			continue
+		}
+
+		// Convert the file path to UTF-8
+		path := autoDetectEncoding(file.Name)
+		dir := filepath.Dir(path)
+		name := filepath.Base(path)
+
+		// Normalize directory path for comparison
+		dir = strings.TrimSuffix(dir, "/")
+		if dir == "." {
+			dir = ""
+		} else {
+			dir += "/"
+		}
+
+		// Check if this file is in the current directory
+		if dir == dirPath {
+			// Add the file to the list
+			fileList.WriteString(name)
+			fileList.WriteString("\r\n")
+		}
+	}
+
+	// Update the text edit
+	te.SetText(fileList.String())
+
+	return nil
 }
 
 func main() {
 	// メインウィンドウを作成
 	mw := new(walk.MainWindow)
 	var tv *walk.TreeView
+	var te *walk.TextEdit
 	var model *ZipTreeModel
 	var currentZipPath string
+	var currentSelectedPath string
 
 	// メインウィンドウを設定
 	if err := (MainWindow{
 		AssignTo: &mw,
 		Title:    "ZIP ファイルビューア",
-		MinSize:  Size{Width: 500, Height: 300},
+		MinSize:  Size{Width: 700, Height: 400},
 		Layout:   VBox{},
 		Children: []Widget{
-			// ツリービュー
-			TreeView{
-				AssignTo:           &tv,
-				StretchFactor:      10, // ウィンドウサイズに合わせて拡大
-				AlwaysConsumeSpace: true,
-				ContextMenuItems: []MenuItem{
-					Action{
-						Text: "Toggle Delete Flag",
-						OnTriggered: func() {
-							// Get the selected item
-							item := tv.CurrentItem()
+			// 水平分割レイアウト
+			Composite{
+				Layout:         HBox{MarginsZero: true},
+				StretchFactor:  10,
+				Children: []Widget{
+					// 左側：ツリービュー
+					TreeView{
+						AssignTo:           &tv,
+						StretchFactor:      5, // 左右の比率
+						AlwaysConsumeSpace: true,
+						ContextMenuItems: []MenuItem{
+							Action{
+								Text: "Toggle Delete Flag",
+								OnTriggered: func() {
+									// Get the selected item
+									item := tv.CurrentItem()
+									// Get the ZipTreeItem
+									zipItem, ok := item.(*ZipTreeItem)
+									if !ok {
+										return
+									}
+
+									// Toggle the deleteFlag and propagate to children
+									newFlag := !zipItem.deleteFlag
+									zipItem.SetDeleteFlagRecursively(newFlag, model)
+								},
+							},
+						},
+						OnMouseDown: func(x, y int, button walk.MouseButton) {
+							// Check if left mouse button was clicked
+							if button != walk.LeftButton {
+								return
+							}
+
+							// Check if Ctrl key is pressed
+							if win.GetKeyState(win.VK_CONTROL) >= 0 { // Not pressed if high bit is not set
+								return
+							}
+
+							// Get the item at the clicked position
+							item := tv.ItemAt(x, y)
+							if item == nil {
+								return
+							}
+
 							// Get the ZipTreeItem
 							zipItem, ok := item.(*ZipTreeItem)
 							if !ok {
 								return
 							}
 
-							// Toggle the deleteFlag
-							zipItem.deleteFlag = !zipItem.deleteFlag
+							// Toggle the deleteFlag and propagate to children
+							newFlag := !zipItem.deleteFlag
+							zipItem.SetDeleteFlagRecursively(newFlag, model)
+						},
+						OnCurrentItemChanged: func() {
+							// Get the selected item
+							item := tv.CurrentItem()
+							// Get the ZipTreeItem
+							zipItem, ok := item.(*ZipTreeItem)
+							if !ok || !zipItem.isDir {
+								return
+							}
+							
+							// Save the current selected path
+							currentSelectedPath = zipItem.path
+							
+							// Update the list view with files in this directory
+							updateFileList(te, currentZipPath, currentSelectedPath)
+						},
+						OnItemActivated: func() {
+							// Get the selected item
+							item := tv.CurrentItem()
+							// Get the ZipTreeItem
+							zipItem, ok := item.(*ZipTreeItem)
+							if !ok || zipItem.isDir {
+								// Ignore if it's not a ZipTreeItem or if it's a directory
+								return
+							}
 
-							// Update the tree view
-							model.PublishItemChanged(zipItem)
+							// Extract the file to a temporary location
+							reader, err := zip.OpenReader(currentZipPath)
+							if err != nil {
+								walk.MsgBox(mw, "エラー", "ZIPファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
+								return
+							}
+							defer reader.Close()
+
+							// Find the file in the ZIP
+							var zipFile *zip.File
+							for _, f := range reader.File {
+								// Automatically detect encoding and convert to UTF-8 for comparison
+								// This will try various encodings (Shift-JIS, EUC-JP, UTF-8, etc.) and convert to UTF-8
+								if autoDetectEncoding(f.Name) == zipItem.path {
+									zipFile = f
+									break
+								}
+							}
+
+							if zipFile == nil {
+								walk.MsgBox(mw, "エラー", "ファイルが見つかりませんでした: "+zipItem.path, walk.MsgBoxIconError)
+								return
+							}
+
+							// Create a temporary directory
+							tempDir, err := os.MkdirTemp("", "zip-editor-")
+							if err != nil {
+								walk.MsgBox(mw, "エラー", "一時ディレクトリを作成できませんでした: "+err.Error(), walk.MsgBoxIconError)
+								return
+							}
+
+							// Create the full path for the extracted file
+							// zipItem.name is already in UTF-8 from our earlier conversion
+							tempFilePath := filepath.Join(tempDir, zipItem.name)
+
+							// Extract the file
+							srcFile, err := zipFile.Open()
+							if err != nil {
+								walk.MsgBox(mw, "エラー", "ファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
+								return
+							}
+							defer srcFile.Close()
+
+							destFile, err := os.Create(tempFilePath)
+							if err != nil {
+								walk.MsgBox(mw, "エラー", "一時ファイルを作成できませんでした: "+err.Error(), walk.MsgBoxIconError)
+								return
+							}
+							defer destFile.Close()
+
+							_, err = io.Copy(destFile, srcFile)
+							if err != nil {
+								walk.MsgBox(mw, "エラー", "ファイルを抽出できませんでした: "+err.Error(), walk.MsgBoxIconError)
+								return
+							}
+
+							// Close the file before opening it
+							destFile.Close()
+
+							// Open the file with the default application
+							cmd := exec.Command("cmd", "/c", "start", "", tempFilePath)
+							err = cmd.Start()
+							if err != nil {
+								walk.MsgBox(mw, "エラー", "ファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
+								return
+							}
 						},
 					},
-				},
-				OnItemActivated: func() {
-					// Get the selected item
-					item := tv.CurrentItem()
-					// Get the ZipTreeItem
-					zipItem, ok := item.(*ZipTreeItem)
-					if !ok || zipItem.isDir {
-						// Ignore if it's not a ZipTreeItem or if it's a directory
-						return
-					}
-
-					// Extract the file to a temporary location
-					reader, err := zip.OpenReader(currentZipPath)
-					if err != nil {
-						walk.MsgBox(mw, "エラー", "ZIPファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
-						return
-					}
-					defer reader.Close()
-
-					// Find the file in the ZIP
-					var zipFile *zip.File
-					for _, f := range reader.File {
-						// Automatically detect encoding and convert to UTF-8 for comparison
-						// This will try various encodings (Shift-JIS, EUC-JP, UTF-8, etc.) and convert to UTF-8
-						if autoDetectEncoding(f.Name) == zipItem.path {
-							zipFile = f
-							break
-						}
-					}
-
-					if zipFile == nil {
-						walk.MsgBox(mw, "エラー", "ファイルが見つかりませんでした: "+zipItem.path, walk.MsgBoxIconError)
-						return
-					}
-
-					// Create a temporary directory
-					tempDir, err := os.MkdirTemp("", "zip-editor-")
-					if err != nil {
-						walk.MsgBox(mw, "エラー", "一時ディレクトリを作成できませんでした: "+err.Error(), walk.MsgBoxIconError)
-						return
-					}
-
-					// Create the full path for the extracted file
-					// zipItem.name is already in UTF-8 from our earlier conversion
-					tempFilePath := filepath.Join(tempDir, zipItem.name)
-
-					// Extract the file
-					srcFile, err := zipFile.Open()
-					if err != nil {
-						walk.MsgBox(mw, "エラー", "ファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
-						return
-					}
-					defer srcFile.Close()
-
-					destFile, err := os.Create(tempFilePath)
-					if err != nil {
-						walk.MsgBox(mw, "エラー", "一時ファイルを作成できませんでした: "+err.Error(), walk.MsgBoxIconError)
-						return
-					}
-					defer destFile.Close()
-
-					_, err = io.Copy(destFile, srcFile)
-					if err != nil {
-						walk.MsgBox(mw, "エラー", "ファイルを抽出できませんでした: "+err.Error(), walk.MsgBoxIconError)
-						return
-					}
-
-					// Close the file before opening it
-					destFile.Close()
-
-					// Open the file with the default application
-					cmd := exec.Command("cmd", "/c", "start", "", tempFilePath)
-					err = cmd.Start()
-					if err != nil {
-						walk.MsgBox(mw, "エラー", "ファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
-						return
-					}
+					// 右側：テキストエディット（ファイル一覧表示用）
+					TextEdit{
+						AssignTo:           &te,
+						StretchFactor:      5, // 左右の比率
+						AlwaysConsumeSpace: true,
+						ReadOnly:           true,
+						VScroll:            true,
+					},
 				},
 			},
 			// ボタンエリア
