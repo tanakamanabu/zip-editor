@@ -91,6 +91,10 @@ type ZipTreeModel struct {
 	rootItem *ZipTreeItem
 }
 
+func CreateEmptyZipTreeModel() *ZipTreeModel {
+	return &ZipTreeModel{rootItem: &ZipTreeItem{name: "", isDir: true}}
+}
+
 // PublishItemChanged はアイテムが変更されたことを通知します
 // 注意: この実装は簡略化されており、実際のイベント通知は行われません
 func (m *ZipTreeModel) PublishItemChanged(item walk.TreeItem) {
