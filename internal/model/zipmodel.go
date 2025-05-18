@@ -135,8 +135,14 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 
 	// ZIPの各ファイルを処理
 	for _, file := range reader.File {
-		// ディレクトリはスキップ（必要に応じて作成）
+		// ディレクトリの場合は明示的に作成
 		if strings.HasSuffix(file.Name, "/") {
+			// パスをコンポーネントに分割し、エンコーディングを自動検出
+			path := fileops.AutoDetectEncoding(file.Name)
+			path = strings.TrimSuffix(path, "/")
+
+			// すべての親ディレクトリが存在することを確認
+			createDirectoryPath(path, rootItem, dirMap)
 			continue
 		}
 
@@ -146,35 +152,44 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 		dir := filepath.Dir(path)
 		dir = strings.TrimSuffix(dir, "/")
 
-		// すべての親ディレクトリが存在することを確認
-		parentPath := ""
-		parentItem := rootItem
-		for _, part := range strings.Split(dir, "/") {
-			if part == "" {
-				continue
-			}
-
-			currentPath := parentPath + part + "/"
-			if item, exists := dirMap[currentPath]; exists {
-				parentItem = item
-			} else {
-				// 新しいディレクトリアイテムを作成
-				newDir := &ZipTreeItem{
-					name:   part,
-					path:   currentPath,
-					parent: parentItem,
-					isDir:  true,
-				}
-				parentItem.children = append(parentItem.children, newDir)
-				dirMap[currentPath] = newDir
-				parentItem = newDir
-			}
-			parentPath = currentPath
-		}
+		// ディレクトリパスを作成
+		_ = createDirectoryPath(dir, rootItem, dirMap)
 
 		// ツリーにはフォルダのみを表示するため、ファイルアイテムは追加しない
 		// ファイルアイテムはparentItem.childrenに追加されない
 	}
 
 	return &ZipTreeModel{rootItem: rootItem}, nil
+}
+
+// createDirectoryPath はパスに基づいてディレクトリ構造を作成し、最後のディレクトリアイテムを返します
+func createDirectoryPath(dirPath string, rootItem *ZipTreeItem, dirMap map[string]*ZipTreeItem) *ZipTreeItem {
+	// すべての親ディレクトリが存在することを確認
+	parentPath := ""
+	parentItem := rootItem
+
+	for _, part := range strings.Split(dirPath, "/") {
+		if part == "" {
+			continue
+		}
+
+		currentPath := parentPath + part + "/"
+		if item, exists := dirMap[currentPath]; exists {
+			parentItem = item
+		} else {
+			// 新しいディレクトリアイテムを作成
+			newDir := &ZipTreeItem{
+				name:   part,
+				path:   currentPath,
+				parent: parentItem,
+				isDir:  true,
+			}
+			parentItem.children = append(parentItem.children, newDir)
+			dirMap[currentPath] = newDir
+			parentItem = newDir
+		}
+		parentPath = currentPath
+	}
+
+	return parentItem
 }
