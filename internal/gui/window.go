@@ -15,7 +15,7 @@ import (
 func CreateMainWindow() {
 	// メインウィンドウを作成
 	mw := new(walk.MainWindow)
-	var te *walk.TextEdit
+	var tableView *walk.TableView
 	var tv *walk.TreeView
 
 	// 現在のZIPファイルパスとモデル
@@ -40,13 +40,16 @@ func CreateMainWindow() {
 						StretchFactor:      5, // 左右の比率
 						AlwaysConsumeSpace: true,
 					},
-					// 右側：テキストエディット（ファイル一覧表示用）
-					TextEdit{
-						AssignTo:           &te,
+					// 右側：TableView（ファイル一覧表示用）
+					TableView{
+						AssignTo:           &tableView,
 						StretchFactor:      5, // 左右の比率
 						AlwaysConsumeSpace: true,
-						ReadOnly:           true,
-						VScroll:            true,
+						Columns: []TableViewColumn{
+							{Title: "ファイル名"},
+							{Title: "サイズ"},
+							{Title: "日付"},
+						},
 					},
 				},
 			},
@@ -102,7 +105,7 @@ func CreateMainWindow() {
 		item := tv.CurrentItem()
 		if zipItem, ok := item.(*model.ZipTreeItem); ok {
 			// 選択されたディレクトリ内のファイル一覧を表示
-			err := fileops.UpdateFileList(te, currentZipPath, zipItem.GetPath())
+			err := fileops.UpdateFileList(tableView, currentZipPath, zipItem.GetPath())
 			if err != nil {
 				walk.MsgBox(mw, "エラー", "ファイル一覧の更新に失敗しました: "+err.Error(), walk.MsgBoxIconError)
 			}
