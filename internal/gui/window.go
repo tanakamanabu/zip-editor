@@ -7,6 +7,7 @@ import (
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 
+	"zip-editor/internal/filemodel"
 	"zip-editor/internal/fileops"
 	"zip-editor/internal/model"
 )
@@ -30,8 +31,7 @@ func CreateMainWindow() {
 		Layout:   VBox{},
 		Children: []Widget{
 			// 水平分割レイアウト
-			Composite{
-				Layout:        HBox{MarginsZero: true},
+			HSplitter{
 				StretchFactor: 10,
 				Children: []Widget{
 					// 左側：ツリービュー
@@ -45,10 +45,46 @@ func CreateMainWindow() {
 						AssignTo:           &tableView,
 						StretchFactor:      5, // 左右の比率
 						AlwaysConsumeSpace: true,
+						CheckBoxes:         true,
 						Columns: []TableViewColumn{
+							{Title: "", Width: 20},
 							{Title: "ファイル名"},
 							{Title: "サイズ"},
 							{Title: "日付"},
+						},
+						OnMouseDown: func(x, y int, button walk.MouseButton) {
+							// マウスクリックの位置からアイテムを特定
+							index := tableView.IndexAt(x, y)
+
+							// チェックボックスカラムの幅（20ピクセル）内かどうかを確認
+							if x <= 20 && index != -1 {
+								// 現在選択されているツリーアイテムを取得
+								treeItem := tv.CurrentItem()
+								if zipItem, ok := treeItem.(*model.ZipTreeItem); ok {
+									dirPath := zipItem.GetPath()
+
+									// モデルから行データを取得
+									itemModel := tableView.Model().(*filemodel.FileItemModel)
+									if index >= 0 && index < len(itemModel.Items) {
+										item := &itemModel.Items[index]
+
+										// 削除フラグを反転
+										item.DeleteFlag = !item.DeleteFlag
+
+										// 完全なファイルパスを作成
+										fullPath := dirPath + item.Name
+
+										// 削除フラグを更新
+										fileops.SetDeleteFlag(currentZipPath, fullPath, item.DeleteFlag)
+
+										// テーブルを更新
+										err := tableView.SetModel(itemModel)
+										if err != nil {
+											return
+										}
+									}
+								}
+							}
 						},
 					},
 				},
@@ -108,6 +144,26 @@ func CreateMainWindow() {
 			err := fileops.UpdateFileList(tableView, currentZipPath, zipItem.GetPath())
 			if err != nil {
 				walk.MsgBox(mw, "エラー", "ファイル一覧の更新に失敗しました: "+err.Error(), walk.MsgBoxIconError)
+			}
+		}
+	})
+
+	// アイテムがダブルクリックされたときの処理（ファイルを開くなどの操作を追加できる）
+	tableView.ItemActivated().Attach(func() {
+		// 現在選択されているツリーアイテムを取得
+		treeItem := tv.CurrentItem()
+		if _, ok := treeItem.(*model.ZipTreeItem); ok {
+			// 選択された行のインデックスを取得
+			indexes := tableView.SelectedIndexes()
+			if len(indexes) > 0 {
+				// ここにファイルを開くなどの処理を追加できる
+				// 例:
+				// row := indexes[0]
+				// model := tableView.Model().(*filemodel.FileItemModel)
+				// if row >= 0 && row < len(model.Items) {
+				//     item := &model.Items[row]
+				//     walk.MsgBox(mw, "ファイル", item.Name + "が選択されました", walk.MsgBoxIconInformation)
+				// }
 			}
 		}
 	})

@@ -10,6 +10,27 @@ import (
 	"zip-editor/internal/filemodel"
 )
 
+// deleteFlags は削除フラグの状態を保持するマップ
+// キーはZIPファイルパスとファイルパスの組み合わせ
+var deleteFlags = make(map[string]bool)
+
+// getDeleteFlagKey はマップのキーを生成します
+func getDeleteFlagKey(zipPath, filePath string) string {
+	return zipPath + "::" + filePath
+}
+
+// GetDeleteFlag は指定されたファイルの削除フラグを取得します
+func GetDeleteFlag(zipPath, filePath string) bool {
+	key := getDeleteFlagKey(zipPath, filePath)
+	return deleteFlags[key]
+}
+
+// SetDeleteFlag は指定されたファイルの削除フラグを設定します
+func SetDeleteFlag(zipPath, filePath string, flag bool) {
+	key := getDeleteFlagKey(zipPath, filePath)
+	deleteFlags[key] = flag
+}
+
 // UpdateFileList は指定されたディレクトリ内のファイル一覧を更新します
 func UpdateFileList(tv *walk.TableView, zipPath string, dirPath string) error {
 	if zipPath == "" {
@@ -46,11 +67,18 @@ func UpdateFileList(tv *walk.TableView, zipPath string, dirPath string) error {
 
 		// このファイルが現在のディレクトリにあるかチェック
 		if dir == dirPath {
+			// 完全なファイルパスを作成
+			fullPath := dir + name
+
+			// 削除フラグの状態を取得
+			deleteFlag := GetDeleteFlag(zipPath, fullPath)
+
 			// ファイルアイテムをリストに追加
 			items = append(items, filemodel.FileItem{
-				Name: name,
-				Size: int64(file.UncompressedSize64),
-				Date: file.Modified,
+				Name:      name,
+				Size:      int64(file.UncompressedSize64),
+				Date:      file.Modified,
+				DeleteFlag: deleteFlag,
 			})
 		}
 	}
