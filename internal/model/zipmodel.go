@@ -151,12 +151,19 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 		path := fileops.AutoDetectEncoding(file.Name)
 		dir := filepath.Dir(path)
 		dir = strings.TrimSuffix(dir, "/")
+		fileName := filepath.Base(path)
 
 		// ディレクトリパスを作成
-		_ = createDirectoryPath(dir, rootItem, dirMap)
+		parentItem := createDirectoryPath(dir, rootItem, dirMap)
 
-		// ツリーにはフォルダのみを表示するため、ファイルアイテムは追加しない
-		// ファイルアイテムはparentItem.childrenに追加されない
+		// ファイルアイテムを親ディレクトリに追加
+		fileItem := &ZipTreeItem{
+			name:   fileName,
+			path:   parentItem.path + fileName,
+			parent: parentItem,
+			isDir:  false,
+		}
+		parentItem.children = append(parentItem.children, fileItem)
 	}
 
 	return &ZipTreeModel{rootItem: rootItem}, nil

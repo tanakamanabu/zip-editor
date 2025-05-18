@@ -140,10 +140,31 @@ func CreateMainWindow() {
 		// 現在選択されているアイテムを取得
 		item := tv.CurrentItem()
 		if zipItem, ok := item.(*model.ZipTreeItem); ok {
-			// 選択されたディレクトリ内のファイル一覧を表示
-			err := fileops.UpdateFileList(tableView, currentZipPath, zipItem.GetPath())
-			if err != nil {
-				walk.MsgBox(mw, "エラー", "ファイル一覧の更新に失敗しました: "+err.Error(), walk.MsgBoxIconError)
+			// ディレクトリかファイルかを確認
+			if zipItem.IsDir() {
+				// ディレクトリの場合、そのディレクトリ内のファイル一覧を表示
+				err := fileops.UpdateFileList(tableView, currentZipPath, zipItem.GetPath())
+				if err != nil {
+					walk.MsgBox(mw, "エラー", "ファイル一覧の更新に失敗しました: "+err.Error(), walk.MsgBoxIconError)
+				}
+			} else {
+				// ファイルの場合、そのファイルの情報を表示
+				// 親ディレクトリのファイル一覧を表示し、このファイルを選択状態にする
+				parentItem := zipItem.Parent().(*model.ZipTreeItem)
+				err := fileops.UpdateFileList(tableView, currentZipPath, parentItem.GetPath())
+				if err != nil {
+					walk.MsgBox(mw, "エラー", "ファイル一覧の更新に失敗しました: "+err.Error(), walk.MsgBoxIconError)
+					return
+				}
+
+				// テーブルビューでファイルを選択
+				itemModel := tableView.Model().(*filemodel.FileItemModel)
+				for i, fileItem := range itemModel.Items {
+					if fileItem.Name == zipItem.GetName() {
+						tableView.SetCurrentIndex(i)
+						break
+					}
+				}
 			}
 		}
 	})
