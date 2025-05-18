@@ -113,6 +113,7 @@ func (m *ZipTreeModel) RootAt(index int) walk.TreeItem {
 	return m.rootItem
 }
 
+
 // LoadZipFile はZIPファイルを読み込み、ツリーモデルを作成します
 func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 	reader, err := zip.OpenReader(filePath)

@@ -6,10 +6,12 @@ import (
 	"strings"
 
 	"github.com/lxn/walk"
+
+	"zip-editor/internal/filemodel"
 )
 
 // UpdateFileList は指定されたディレクトリ内のファイル一覧を更新します
-func UpdateFileList(te *walk.TextEdit, zipPath string, dirPath string) error {
+func UpdateFileList(tv *walk.TableView, zipPath string, dirPath string) error {
 	if zipPath == "" {
 		return nil
 	}
@@ -21,11 +23,8 @@ func UpdateFileList(te *walk.TextEdit, zipPath string, dirPath string) error {
 	}
 	defer reader.Close()
 
-	// テキストエディットをクリア
-	te.SetText("")
-
 	// ZIPの各ファイルを処理
-	var fileList strings.Builder
+	var items []filemodel.FileItem
 	for _, file := range reader.File {
 		// ディレクトリはスキップ
 		if strings.HasSuffix(file.Name, "/") {
@@ -47,14 +46,19 @@ func UpdateFileList(te *walk.TextEdit, zipPath string, dirPath string) error {
 
 		// このファイルが現在のディレクトリにあるかチェック
 		if dir == dirPath {
-			// ファイルをリストに追加
-			fileList.WriteString(name)
-			fileList.WriteString("\r\n")
+			// ファイルアイテムをリストに追加
+			items = append(items, filemodel.FileItem{
+				Name: name,
+				Size: int64(file.UncompressedSize64),
+				Date: file.Modified,
+			})
 		}
 	}
 
-	// テキストエディットを更新
-	te.SetText(fileList.String())
+	// TableViewのモデルを設定
+	model := new(filemodel.FileItemModel)
+	model.Items = items
+	tv.SetModel(model)
 
 	return nil
 }
