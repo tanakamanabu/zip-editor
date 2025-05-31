@@ -1,13 +1,8 @@
 package fileops
 
 import (
-	"archive/zip"
-	"path/filepath"
-	"strings"
-
 	"github.com/lxn/walk"
-
-	"zip-editor/internal/filemodel"
+	"zip-editor/internal/model"
 )
 
 // deleteFlags は削除フラグの状態を保持するマップ
@@ -32,61 +27,22 @@ func SetDeleteFlag(zipPath, filePath string, flag bool) {
 }
 
 // UpdateFileList は指定されたディレクトリ内のファイル一覧を更新します
-func UpdateFileList(tv *walk.TableView, zipPath string, dirPath string) error {
-	if zipPath == "" {
-		return nil
-	}
-
-	// ZIPファイルを開く
-	reader, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	// ZIPの各ファイルを処理
-	var items []filemodel.FileItem
-	for _, file := range reader.File {
-		// ディレクトリはスキップ
-		if strings.HasSuffix(file.Name, "/") {
-			continue
-		}
-
-		// ファイルパスをUTF-8に変換
-		path := AutoDetectEncoding(file.Name)
-		dir := filepath.Dir(path)
-		name := filepath.Base(path)
-
-		// 比較のためにディレクトリパスを正規化
-		dir = strings.TrimSuffix(dir, "/")
-		if dir == "." {
-			dir = ""
-		} else {
-			dir += "/"
-		}
-
-		// このファイルが現在のディレクトリにあるかチェック
-		if dir == dirPath {
-			// 完全なファイルパスを作成
-			fullPath := dir + name
-
-			// 削除フラグの状態を取得
-			deleteFlag := GetDeleteFlag(zipPath, fullPath)
-
-			// ファイルアイテムをリストに追加
-			items = append(items, filemodel.FileItem{
-				Name:      name,
-				Size:      int64(file.UncompressedSize64),
-				Date:      file.Modified,
-				DeleteFlag: deleteFlag,
-			})
-		}
-	}
+func UpdateFileList(tv *walk.TableView, treeItem *model.ZipTreeItem) error {
 
 	// TableViewのモデルを設定
-	model := new(filemodel.FileItemModel)
-	model.Items = items
-	tv.SetModel(model)
+	fileModel := new(model.FileItemModel)
+
+	// ポインタのスライスから値のスライスに変換
+	ptrFiles := treeItem.GetFiles()
+	valueFiles := make([]model.ZipTreeItem, len(ptrFiles))
+	for i, file := range ptrFiles {
+		if file != nil {
+			valueFiles[i] = *file
+		}
+	}
+
+	fileModel.Items = valueFiles
+	tv.SetModel(fileModel)
 
 	return nil
 }
