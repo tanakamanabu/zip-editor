@@ -1,4 +1,4 @@
-package fileops
+package common
 
 import (
 	"unicode/utf8"

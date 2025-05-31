@@ -7,7 +7,6 @@ import (
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 
-	"zip-editor/internal/filemodel"
 	"zip-editor/internal/fileops"
 	"zip-editor/internal/model"
 )
@@ -64,7 +63,7 @@ func CreateMainWindow() {
 									dirPath := zipItem.GetPath()
 
 									// モデルから行データを取得
-									itemModel := tableView.Model().(*filemodel.FileItemModel)
+									itemModel := tableView.Model().(*model.FileItemModel)
 									if index >= 0 && index < len(itemModel.Items) {
 										item := &itemModel.Items[index]
 
@@ -72,7 +71,7 @@ func CreateMainWindow() {
 										item.DeleteFlag = !item.DeleteFlag
 
 										// 完全なファイルパスを作成
-										fullPath := dirPath + item.Name
+										fullPath := dirPath + item.GetName()
 
 										// 削除フラグを更新
 										fileops.SetDeleteFlag(currentZipPath, fullPath, item.DeleteFlag)
@@ -140,30 +139,11 @@ func CreateMainWindow() {
 		// 現在選択されているアイテムを取得
 		item := tv.CurrentItem()
 		if zipItem, ok := item.(*model.ZipTreeItem); ok {
-			// ディレクトリかファイルかを確認
+			// ディレクトリしかない
 			if zipItem.IsDir() {
-				// ディレクトリの場合、そのディレクトリ内のファイル一覧を表示
-				err := fileops.UpdateFileList(tableView, currentZipPath, zipItem.GetPath())
+				err := fileops.UpdateFileList(tableView, zipItem)
 				if err != nil {
 					walk.MsgBox(mw, "エラー", "ファイル一覧の更新に失敗しました: "+err.Error(), walk.MsgBoxIconError)
-				}
-			} else {
-				// ファイルの場合、そのファイルの情報を表示
-				// 親ディレクトリのファイル一覧を表示し、このファイルを選択状態にする
-				parentItem := zipItem.Parent().(*model.ZipTreeItem)
-				err := fileops.UpdateFileList(tableView, currentZipPath, parentItem.GetPath())
-				if err != nil {
-					walk.MsgBox(mw, "エラー", "ファイル一覧の更新に失敗しました: "+err.Error(), walk.MsgBoxIconError)
-					return
-				}
-
-				// テーブルビューでファイルを選択
-				itemModel := tableView.Model().(*filemodel.FileItemModel)
-				for i, fileItem := range itemModel.Items {
-					if fileItem.Name == zipItem.GetName() {
-						tableView.SetCurrentIndex(i)
-						break
-					}
 				}
 			}
 		}
@@ -180,10 +160,10 @@ func CreateMainWindow() {
 				// ここにファイルを開くなどの処理を追加できる
 				// 例:
 				// row := indexes[0]
-				// model := tableView.Model().(*filemodel.FileItemModel)
+				// model := tableView.Model().(*model.FileItemModel)
 				// if row >= 0 && row < len(model.Items) {
 				//     item := &model.Items[row]
-				//     walk.MsgBox(mw, "ファイル", item.Name + "が選択されました", walk.MsgBoxIconInformation)
+				//     walk.MsgBox(mw, "ファイル", item.GetName() + "が選択されました", walk.MsgBoxIconInformation)
 				// }
 			}
 		}

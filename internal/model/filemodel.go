@@ -1,24 +1,14 @@
-package filemodel
+package model
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/lxn/walk"
 )
-
-// FileItem はZIPファイル内のファイルアイテムを表します
-type FileItem struct {
-	Name      string
-	Size      int64
-	Date      time.Time
-	DeleteFlag bool
-}
 
 // FileItemModel はTableView用のモデルを表します
 type FileItemModel struct {
 	walk.TableModelBase
-	Items []FileItem
+	Items []ZipTreeItem
 }
 
 // SetValue は指定された行と列の値を設定します
@@ -55,19 +45,39 @@ func (m *FileItemModel) Value(row, col int) interface{} {
 	case 0:
 		return item.DeleteFlag
 	case 1:
-		return item.Name
+		return item.GetName()
 	case 2:
 		// サイズをKBに変換し、カンマ区切りで表示
-		sizeKB := float64(item.Size) / 1024.0
+		sizeKB := float64(item.GetSize()) / 1024.0
 		if sizeKB < 0.1 {
 			return "0.1 KB" // 最小表示サイズ
 		}
 		return formatWithCommas(sizeKB) + " KB"
 	case 3:
-		return item.Date.Format("2006/01/02 15:04:05")
+		return item.GetDate().Format("2006/01/02 15:04:05")
 	}
 
 	return nil
+}
+
+// ColumnCount はカラム数を返します
+func (m *FileItemModel) ColumnCount() int {
+	return 4
+}
+
+// ColumnName は指定された列の名前を返します
+func (m *FileItemModel) ColumnName(col int) string {
+	switch col {
+	case 0:
+		return "" // チェックボックス用の空の列名
+	case 1:
+		return "ファイル名"
+	case 2:
+		return "サイズ"
+	case 3:
+		return "日付"
+	}
+	return ""
 }
 
 // formatWithCommas は数値をカンマ区切りでフォーマットします
@@ -103,24 +113,4 @@ func formatWithCommas(num float64) string {
 	}
 
 	return result
-}
-
-// ColumnCount はカラム数を返します
-func (m *FileItemModel) ColumnCount() int {
-	return 4
-}
-
-// ColumnName は指定された列の名前を返します
-func (m *FileItemModel) ColumnName(col int) string {
-	switch col {
-	case 0:
-		return ""  // チェックボックス用の空の列名
-	case 1:
-		return "ファイル名"
-	case 2:
-		return "サイズ"
-	case 3:
-		return "日付"
-	}
-	return ""
 }

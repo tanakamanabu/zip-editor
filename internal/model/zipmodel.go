@@ -4,20 +4,23 @@ import (
 	"archive/zip"
 	"path/filepath"
 	"strings"
+	"time"
+	"zip-editor/internal/common"
 
 	"github.com/lxn/walk"
-
-	"zip-editor/internal/fileops"
 )
 
 // ZipTreeItem はZIPファイルツリー内のアイテムを表します
 type ZipTreeItem struct {
 	name       string
+	size       int64
+	date       time.Time
 	path       string
 	children   []*ZipTreeItem
+	files      []*ZipTreeItem
 	parent     *ZipTreeItem
 	isDir      bool
-	deleteFlag bool
+	DeleteFlag bool
 }
 
 // GetName は名前を返します
@@ -25,9 +28,24 @@ func (item *ZipTreeItem) GetName() string {
 	return item.name
 }
 
+// GetSize はサイズを返します
+func (item *ZipTreeItem) GetSize() int64 {
+	return item.size
+}
+
+// GetDate は日付を返します
+func (item *ZipTreeItem) GetDate() time.Time {
+	return item.date
+}
+
 // GetPath はパスを返します
 func (item *ZipTreeItem) GetPath() string {
 	return item.path
+}
+
+// GetFiles はファイルリストを返します
+func (item *ZipTreeItem) GetFiles() []*ZipTreeItem {
+	return item.files
 }
 
 // IsDir はディレクトリかどうかを返します
@@ -35,14 +53,9 @@ func (item *ZipTreeItem) IsDir() bool {
 	return item.isDir
 }
 
-// GetDeleteFlag は削除フラグを返します
-func (item *ZipTreeItem) GetDeleteFlag() bool {
-	return item.deleteFlag
-}
-
 // SetDeleteFlagRecursively はこのアイテムとすべての子に削除フラグを設定します
 func (item *ZipTreeItem) SetDeleteFlagRecursively(flag bool, model *ZipTreeModel) {
-	item.deleteFlag = flag
+	item.DeleteFlag = flag
 	model.PublishItemChanged(item)
 
 	// 再帰的にすべての子にフラグを設定
@@ -53,7 +66,7 @@ func (item *ZipTreeItem) SetDeleteFlagRecursively(flag bool, model *ZipTreeModel
 
 // Text は表示テキストを返します
 func (item *ZipTreeItem) Text() string {
-	if item.deleteFlag {
+	if item.DeleteFlag {
 		return item.name + " [削除予定]"
 	}
 	return item.name
@@ -113,7 +126,6 @@ func (m *ZipTreeModel) RootAt(index int) walk.TreeItem {
 	return m.rootItem
 }
 
-
 // LoadZipFile はZIPファイルを読み込み、ツリーモデルを作成します
 func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 	reader, err := zip.OpenReader(filePath)
@@ -138,7 +150,7 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 		// ディレクトリの場合は明示的に作成
 		if strings.HasSuffix(file.Name, "/") {
 			// パスをコンポーネントに分割し、エンコーディングを自動検出
-			path := fileops.AutoDetectEncoding(file.Name)
+			path := common.AutoDetectEncoding(file.Name)
 			path = strings.TrimSuffix(path, "/")
 
 			// すべての親ディレクトリが存在することを確認
@@ -148,8 +160,9 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 
 		// パスをコンポーネントに分割し、エンコーディングを自動検出
 		// これは様々なエンコーディング（Shift-JIS、EUC-JP、UTF-8など）を試し、UTF-8に変換します
-		path := fileops.AutoDetectEncoding(file.Name)
+		path := common.AutoDetectEncoding(file.Name)
 		dir := filepath.Dir(path)
+		dir = strings.ReplaceAll(dir, "\\", "/")
 		dir = strings.TrimSuffix(dir, "/")
 		fileName := filepath.Base(path)
 
@@ -163,7 +176,7 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 			parent: parentItem,
 			isDir:  false,
 		}
-		parentItem.children = append(parentItem.children, fileItem)
+		parentItem.files = append(parentItem.files, fileItem)
 	}
 
 	return &ZipTreeModel{rootItem: rootItem}, nil
@@ -171,6 +184,11 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 
 // createDirectoryPath はパスに基づいてディレクトリ構造を作成し、最後のディレクトリアイテムを返します
 func createDirectoryPath(dirPath string, rootItem *ZipTreeItem, dirMap map[string]*ZipTreeItem) *ZipTreeItem {
+	//ルートの場合はdirPathが"."になるのではじめにチェックする
+	if dirPath == "." {
+		return rootItem
+	}
+
 	// すべての親ディレクトリが存在することを確認
 	parentPath := ""
 	parentItem := rootItem
