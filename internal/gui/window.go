@@ -65,10 +65,7 @@ func CreateMainWindow() {
 									// モデルから行データを取得
 									itemModel := tableView.Model().(*model.FileItemModel)
 									if index >= 0 && index < len(itemModel.Items) {
-										item := &itemModel.Items[index]
-
-										// 削除フラグを反転
-										item.DeleteFlag = !item.DeleteFlag
+										item := itemModel.Items[index]
 
 										// 完全なファイルパスを作成
 										fullPath := dirPath + item.GetName()
@@ -162,7 +159,7 @@ func CreateMainWindow() {
 				// row := indexes[0]
 				// model := tableView.Model().(*model.FileItemModel)
 				// if row >= 0 && row < len(model.Items) {
-				//     item := &model.Items[row]
+				//     item := model.Items[row]
 				//     walk.MsgBox(mw, "ファイル", item.GetName() + "が選択されました", walk.MsgBoxIconInformation)
 				// }
 			}
