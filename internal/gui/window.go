@@ -36,7 +36,8 @@ func CreateMainWindow() {
 		item := tv.CurrentItem()
 		if zipItem, ok := item.(*model.ZipTreeItem); ok && zipItem.IsDir() {
 			// 再帰的に削除フラグをONに設定
-			zipItem.SetDeleteFlagRecursively(true, zipModel)
+			zipItem.DeleteFlag = true
+			fileops.UpdateDeleteFlagRecursively(currentZipPath, zipItem)
 
 			// 現在表示中のファイル一覧を更新
 			fileops.UpdateFileList(tableView, zipItem)
@@ -52,7 +53,8 @@ func CreateMainWindow() {
 		item := tv.CurrentItem()
 		if zipItem, ok := item.(*model.ZipTreeItem); ok && zipItem.IsDir() {
 			// 再帰的に削除フラグをOFFに設定
-			zipItem.SetDeleteFlagRecursively(false, zipModel)
+			zipItem.DeleteFlag = false
+			fileops.UpdateDeleteFlagRecursively(currentZipPath, zipItem)
 
 			// 現在表示中のファイル一覧を更新
 			fileops.UpdateFileList(tableView, zipItem)
@@ -97,19 +99,15 @@ func CreateMainWindow() {
 							if x <= 20 && index != -1 {
 								// 現在選択されているツリーアイテムを取得
 								treeItem := tv.CurrentItem()
-								if zipItem, ok := treeItem.(*model.ZipTreeItem); ok {
-									dirPath := zipItem.GetPath()
+								if _, ok := treeItem.(*model.ZipTreeItem); ok {
 
 									// モデルから行データを取得
 									itemModel := tableView.Model().(*model.FileItemModel)
 									if index >= 0 && index < len(itemModel.Items) {
 										item := itemModel.Items[index]
 
-										// 完全なファイルパスを作成
-										fullPath := dirPath + item.GetName()
-
 										// 削除フラグを更新
-										fileops.SetDeleteFlag(currentZipPath, fullPath, item.DeleteFlag)
+										fileops.UpdateDeleteFlagRecursively(currentZipPath, item)
 
 										// テーブルを更新
 										err := tableView.SetModel(itemModel)

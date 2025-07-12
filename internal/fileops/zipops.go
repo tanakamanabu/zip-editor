@@ -26,9 +26,26 @@ func GetDeleteFlag(zipPath, filePath string) bool {
 }
 
 // SetDeleteFlag は指定されたファイルの削除フラグを設定します
-func SetDeleteFlag(zipPath, filePath string, flag bool) {
+func setDeleteFlag(zipPath, filePath string, flag bool) {
 	key := getDeleteFlagKey(zipPath, filePath)
 	deleteFlags[key] = flag
+}
+
+func UpdateDeleteFlagRecursively(currentZipPath string, item *model.ZipTreeItem) {
+	// 自分の削除フラグ設定
+	setDeleteFlag(currentZipPath, item.GetPath(), item.DeleteFlag)
+
+	// 自分の持ってるファイルの削除フラグを全部設定
+	for _, file := range item.GetFiles() {
+		file.DeleteFlag = item.DeleteFlag
+		setDeleteFlag(currentZipPath, file.GetPath(), file.DeleteFlag)
+	}
+
+	// 再帰的にすべての子にフラグを設定
+	for _, child := range item.GetChildren() {
+		child.DeleteFlag = item.DeleteFlag
+		UpdateDeleteFlagRecursively(currentZipPath, child)
+	}
 }
 
 // DeleteFlaggedFiles は削除フラグが付いたファイルをZIPファイルから削除します
