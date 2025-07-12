@@ -48,7 +48,6 @@ func DeleteFlaggedFiles(zipPath string) error {
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
 
 	// 新しいZIPファイルを作成
 	newZipFile, err := os.Create(tempZipPath)
@@ -76,7 +75,6 @@ func DeleteFlaggedFiles(zipPath string) error {
 		if err != nil {
 			return err
 		}
-		defer fileReader.Close()
 
 		// 新しいZIPファイルにファイルを追加
 		header := &zip.FileHeader{
@@ -87,11 +85,13 @@ func DeleteFlaggedFiles(zipPath string) error {
 
 		writer, err := zipWriter.CreateHeader(header)
 		if err != nil {
+			fileReader.Close()
 			return err
 		}
 
 		// ファイルの内容をコピー
 		_, err = io.Copy(writer, fileReader)
+		fileReader.Close()
 		if err != nil {
 			return err
 		}
@@ -108,6 +108,9 @@ func DeleteFlaggedFiles(zipPath string) error {
 	if err != nil {
 		return err
 	}
+
+	// 元のZIPファイルを閉じる
+	reader.Close()
 
 	// 元のZIPファイルを削除
 	err = os.Remove(zipPath)
