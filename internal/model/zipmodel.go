@@ -48,28 +48,22 @@ func (item *ZipTreeItem) GetFiles() []*ZipTreeItem {
 	return item.files
 }
 
+// GetChildren はサブディレクトリの一覧を返します
+func (item *ZipTreeItem) GetChildren() []*ZipTreeItem {
+	return item.children
+}
+
 // IsDir はディレクトリかどうかを返します
 func (item *ZipTreeItem) IsDir() bool {
 	return item.isDir
 }
 
-// SetDeleteFlagRecursively はこのアイテムとすべての子に削除フラグを設定します
-func (item *ZipTreeItem) SetDeleteFlagRecursively(flag bool, model *ZipTreeModel) {
-	item.DeleteFlag = flag
-	model.PublishItemChanged(item)
-
-	// 再帰的にすべての子にフラグを設定
-	for _, child := range item.children {
-		child.SetDeleteFlagRecursively(flag, model)
-	}
-}
-
 // Text は表示テキストを返します
 func (item *ZipTreeItem) Text() string {
 	if item.DeleteFlag {
-		return item.name + " [削除予定]"
+		return "☑" + item.name
 	}
-	return item.name
+	return "□" + item.name
 }
 
 // Parent は親アイテムを返します

@@ -22,6 +22,46 @@ func CreateMainWindow() {
 	var currentZipPath string
 	var zipModel *model.ZipTreeModel
 
+	// ツリービュー用のコンテキストメニューを作成
+	treeContextMenu, err := walk.NewMenu()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 削除メニュー項目を追加
+	deleteAction := walk.NewAction()
+	deleteAction.SetText("削除")
+	deleteAction.Triggered().Attach(func() {
+		// 現在選択されているアイテムを取得
+		item := tv.CurrentItem()
+		if zipItem, ok := item.(*model.ZipTreeItem); ok && zipItem.IsDir() {
+			// 再帰的に削除フラグをONに設定
+			zipItem.DeleteFlag = true
+			fileops.UpdateDeleteFlagRecursively(currentZipPath, zipItem)
+
+			// 現在表示中のファイル一覧を更新
+			fileops.UpdateFileList(tableView, zipItem)
+		}
+	})
+	treeContextMenu.Actions().Add(deleteAction)
+
+	// クリアメニュー項目を追加
+	clearAction := walk.NewAction()
+	clearAction.SetText("クリア")
+	clearAction.Triggered().Attach(func() {
+		// 現在選択されているアイテムを取得
+		item := tv.CurrentItem()
+		if zipItem, ok := item.(*model.ZipTreeItem); ok && zipItem.IsDir() {
+			// 再帰的に削除フラグをOFFに設定
+			zipItem.DeleteFlag = false
+			fileops.UpdateDeleteFlagRecursively(currentZipPath, zipItem)
+
+			// 現在表示中のファイル一覧を更新
+			fileops.UpdateFileList(tableView, zipItem)
+		}
+	})
+	treeContextMenu.Actions().Add(clearAction)
+
 	// メインウィンドウを設定
 	if err := (MainWindow{
 		AssignTo: &mw,
@@ -59,19 +99,15 @@ func CreateMainWindow() {
 							if x <= 20 && index != -1 {
 								// 現在選択されているツリーアイテムを取得
 								treeItem := tv.CurrentItem()
-								if zipItem, ok := treeItem.(*model.ZipTreeItem); ok {
-									dirPath := zipItem.GetPath()
+								if _, ok := treeItem.(*model.ZipTreeItem); ok {
 
 									// モデルから行データを取得
 									itemModel := tableView.Model().(*model.FileItemModel)
 									if index >= 0 && index < len(itemModel.Items) {
 										item := itemModel.Items[index]
 
-										// 完全なファイルパスを作成
-										fullPath := dirPath + item.GetName()
-
 										// 削除フラグを更新
-										fileops.SetDeleteFlag(currentZipPath, fullPath, item.DeleteFlag)
+										fileops.UpdateDeleteFlagRecursively(currentZipPath, item)
 
 										// テーブルを更新
 										err := tableView.SetModel(itemModel)
@@ -125,6 +161,9 @@ func CreateMainWindow() {
 	}).Create(); err != nil {
 		log.Fatal(err)
 	}
+
+	// ツリービューにコンテキストメニューを設定
+	tv.SetContextMenu(treeContextMenu)
 
 	// ドロップイベントを処理
 	mw.DropFiles().Attach(func(files []string) {
