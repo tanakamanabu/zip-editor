@@ -129,12 +129,6 @@ func DeleteFlaggedFiles(zipPath string) error {
 	// 元のZIPファイルを閉じる
 	reader.Close()
 
-	// 元のZIPファイルを削除
-	err = os.Remove(zipPath)
-	if err != nil {
-		return err
-	}
-
 	// 一時ZIPファイルを元の場所にコピー
 	err = copyFile(tempZipPath, zipPath)
 	if err != nil {
