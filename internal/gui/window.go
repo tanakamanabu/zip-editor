@@ -91,9 +91,32 @@ func CreateMainWindow() {
 				Children: []Widget{
 					HSpacer{}, // 右寄せのためのスペーサー
 					PushButton{
-						Text: "OK",
+						Text: "削除",
 						OnClicked: func() {
-							walk.MsgBox(mw, "確認", "OKボタンがクリックされました", walk.MsgBoxIconInformation)
+							// 削除確認ダイアログを表示
+							if walk.MsgBox(mw, "確認", "削除フラグが付いたファイルを削除しますか？", walk.MsgBoxIconQuestion|walk.MsgBoxYesNo) == walk.DlgCmdYes {
+								// 削除処理を実行
+								if currentZipPath != "" {
+									err := fileops.DeleteFlaggedFiles(currentZipPath)
+									if err != nil {
+										walk.MsgBox(mw, "エラー", "ファイルの削除に失敗しました: "+err.Error(), walk.MsgBoxIconError)
+										return
+									}
+
+									// 削除成功メッセージを表示
+									walk.MsgBox(mw, "完了", "削除フラグが付いたファイルを削除しました", walk.MsgBoxIconInformation)
+
+									// ZIPファイルを再読み込み
+									zipModel, err = model.LoadZipFile(currentZipPath)
+									if err != nil {
+										walk.MsgBox(mw, "エラー", "ZIPファイルの再読み込みに失敗しました: "+err.Error(), walk.MsgBoxIconError)
+										return
+									}
+
+									// ツリービューにモデルを設定
+									tv.SetModel(zipModel)
+								}
+							}
 						},
 					},
 				},
