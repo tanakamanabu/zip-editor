@@ -1,7 +1,12 @@
 package fileops
 
 import (
+	"archive/zip"
 	"github.com/lxn/walk"
+	"io"
+	"os"
+	"path/filepath"
+	"zip-editor/internal/common"
 	"zip-editor/internal/model"
 )
 
@@ -24,6 +29,99 @@ func GetDeleteFlag(zipPath, filePath string) bool {
 func SetDeleteFlag(zipPath, filePath string, flag bool) {
 	key := getDeleteFlagKey(zipPath, filePath)
 	deleteFlags[key] = flag
+}
+
+// DeleteFlaggedFiles は削除フラグが付いたファイルをZIPファイルから削除します
+func DeleteFlaggedFiles(zipPath string) error {
+	// 一時ディレクトリを作成
+	tempDir, err := os.MkdirTemp("", "zip-editor-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tempDir) // 関数終了時に一時ディレクトリを削除
+
+	// 一時ZIPファイルのパスを生成
+	tempZipPath := filepath.Join(tempDir, "temp.zip")
+
+	// 元のZIPファイルを開く
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	// 新しいZIPファイルを作成
+	newZipFile, err := os.Create(tempZipPath)
+	if err != nil {
+		return err
+	}
+	defer newZipFile.Close()
+
+	// 新しいZIPライターを作成
+	zipWriter := zip.NewWriter(newZipFile)
+	defer zipWriter.Close()
+
+	// 元のZIPファイルの各ファイルを処理
+	for _, file := range reader.File {
+		// ファイルパスをUTF-8に変換
+		path := common.AutoDetectEncoding(file.Name)
+
+		// 削除フラグをチェック
+		if GetDeleteFlag(zipPath, path) {
+			continue // 削除フラグが付いているファイルはスキップ
+		}
+
+		// 元のファイルを開く
+		fileReader, err := file.Open()
+		if err != nil {
+			return err
+		}
+		defer fileReader.Close()
+
+		// 新しいZIPファイルにファイルを追加
+		header := &zip.FileHeader{
+			Name:   file.Name,
+			Method: file.Method,
+		}
+		header.SetModTime(file.Modified)
+
+		writer, err := zipWriter.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+
+		// ファイルの内容をコピー
+		_, err = io.Copy(writer, fileReader)
+		if err != nil {
+			return err
+		}
+	}
+
+	// ZIPライターを閉じる
+	err = zipWriter.Close()
+	if err != nil {
+		return err
+	}
+
+	// 新しいZIPファイルを閉じる
+	err = newZipFile.Close()
+	if err != nil {
+		return err
+	}
+
+	// 元のZIPファイルを削除
+	err = os.Remove(zipPath)
+	if err != nil {
+		return err
+	}
+
+	// 一時ZIPファイルを元の場所に移動
+	err = os.Rename(tempZipPath, zipPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // UpdateFileList は指定されたディレクトリ内のファイル一覧を更新します
