@@ -118,8 +118,46 @@ func DeleteFlaggedFiles(zipPath string) error {
 		return err
 	}
 
-	// 一時ZIPファイルを元の場所に移動
-	err = os.Rename(tempZipPath, zipPath)
+	// 一時ZIPファイルを元の場所にコピー
+	err = copyFile(tempZipPath, zipPath)
+	if err != nil {
+		return err
+	}
+
+	// コピー元の一時ファイルを削除
+	err = os.Remove(tempZipPath)
+	if err != nil {
+		// コピーは成功しているので、一時ファイルの削除に失敗しても処理は続行
+		// ただし、ログに記録するなどの対応が望ましい
+	}
+
+	return nil
+}
+
+// copyFile はファイルをソースからデスティネーションにコピーします
+func copyFile(src, dst string) error {
+	// ソースファイルを開く
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	// デスティネーションファイルを作成
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	// ソースからデスティネーションにコピー
+	_, err = io.Copy(destFile, sourceFile)
+	if err != nil {
+		return err
+	}
+
+	// ファイルをフラッシュして確実にディスクに書き込む
+	err = destFile.Sync()
 	if err != nil {
 		return err
 	}
