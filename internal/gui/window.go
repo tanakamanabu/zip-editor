@@ -22,6 +22,44 @@ func CreateMainWindow() {
 	var currentZipPath string
 	var zipModel *model.ZipTreeModel
 
+	// ツリービュー用のコンテキストメニューを作成
+	treeContextMenu, err := walk.NewMenu()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 削除メニュー項目を追加
+	deleteAction := walk.NewAction()
+	deleteAction.SetText("削除")
+	deleteAction.Triggered().Attach(func() {
+		// 現在選択されているアイテムを取得
+		item := tv.CurrentItem()
+		if zipItem, ok := item.(*model.ZipTreeItem); ok && zipItem.IsDir() {
+			// 再帰的に削除フラグをONに設定
+			zipItem.SetDeleteFlagRecursively(true, zipModel)
+
+			// 現在表示中のファイル一覧を更新
+			fileops.UpdateFileList(tableView, zipItem)
+		}
+	})
+	treeContextMenu.Actions().Add(deleteAction)
+
+	// クリアメニュー項目を追加
+	clearAction := walk.NewAction()
+	clearAction.SetText("クリア")
+	clearAction.Triggered().Attach(func() {
+		// 現在選択されているアイテムを取得
+		item := tv.CurrentItem()
+		if zipItem, ok := item.(*model.ZipTreeItem); ok && zipItem.IsDir() {
+			// 再帰的に削除フラグをOFFに設定
+			zipItem.SetDeleteFlagRecursively(false, zipModel)
+
+			// 現在表示中のファイル一覧を更新
+			fileops.UpdateFileList(tableView, zipItem)
+		}
+	})
+	treeContextMenu.Actions().Add(clearAction)
+
 	// メインウィンドウを設定
 	if err := (MainWindow{
 		AssignTo: &mw,
@@ -125,6 +163,9 @@ func CreateMainWindow() {
 	}).Create(); err != nil {
 		log.Fatal(err)
 	}
+
+	// ツリービューにコンテキストメニューを設定
+	tv.SetContextMenu(treeContextMenu)
 
 	// ドロップイベントを処理
 	mw.DropFiles().Attach(func(files []string) {
