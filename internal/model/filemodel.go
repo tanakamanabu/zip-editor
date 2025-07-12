@@ -8,7 +8,7 @@ import (
 // FileItemModel はTableView用のモデルを表します
 type FileItemModel struct {
 	walk.TableModelBase
-	Items []ZipTreeItem
+	Items []*ZipTreeItem
 }
 
 // SetValue は指定された行と列の値を設定します
@@ -78,6 +78,15 @@ func (m *FileItemModel) ColumnName(col int) string {
 		return "日付"
 	}
 	return ""
+}
+
+func (m *FileItemModel) Checked(row int) bool {
+	return m.Items[row].DeleteFlag
+}
+
+func (m *FileItemModel) SetChecked(row int, checked bool) error {
+	m.Items[row].DeleteFlag = checked
+	return nil
 }
 
 // formatWithCommas は数値をカンマ区切りでフォーマットします

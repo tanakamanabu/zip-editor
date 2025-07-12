@@ -32,16 +32,8 @@ func UpdateFileList(tv *walk.TableView, treeItem *model.ZipTreeItem) error {
 	// TableViewのモデルを設定
 	fileModel := new(model.FileItemModel)
 
-	// ポインタのスライスから値のスライスに変換
-	ptrFiles := treeItem.GetFiles()
-	valueFiles := make([]model.ZipTreeItem, len(ptrFiles))
-	for i, file := range ptrFiles {
-		if file != nil {
-			valueFiles[i] = *file
-		}
-	}
-
-	fileModel.Items = valueFiles
+	// ポインタのスライスをそのまま使用
+	fileModel.Items = treeItem.GetFiles()
 	tv.SetModel(fileModel)
 
 	return nil
