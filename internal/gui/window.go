@@ -2,6 +2,7 @@ package gui
 
 import (
 	"log"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/lxn/walk"
@@ -15,7 +16,8 @@ import (
 func CreateMainWindow() {
 	// メインウィンドウを作成
 	mw := new(walk.MainWindow)
-	var tableView *walk.TableView
+	var tableView *walk.TableView    // 右側：ディレクトリ内のファイル一覧
+	var fileListView *walk.TableView // 左側：ZIPファイル一覧
 	var tv *walk.TreeView
 
 	// 現在のZIPファイルパスとモデル
@@ -62,6 +64,11 @@ func CreateMainWindow() {
 	})
 	treeContextMenu.Actions().Add(clearAction)
 
+	// 左ペインのモデル（ZIPファイル一覧）
+	fileListModel := model.NewFileListModel()
+	// 左ペインの前回選択インデックス
+	lastFileListIndex := -1
+
 	// メインウィンドウを設定
 	if err := (MainWindow{
 		AssignTo: &mw,
@@ -73,16 +80,25 @@ func CreateMainWindow() {
 			HSplitter{
 				StretchFactor: 10,
 				Children: []Widget{
-					// 左側：ツリービュー
+					// 左側：ZIPファイル一覧（TableView）
+					TableView{
+						AssignTo:           &fileListView,
+						StretchFactor:      3,
+						AlwaysConsumeSpace: true,
+						Columns: []TableViewColumn{
+							{Title: "ファイル"}, // ファイル名のみ表示
+						},
+					},
+					// 中央：ツリービュー
 					TreeView{
 						AssignTo:           &tv,
-						StretchFactor:      5, // 左右の比率
+						StretchFactor:      4,
 						AlwaysConsumeSpace: true,
 					},
-					// 右側：TableView（ファイル一覧表示用）
+					// 右側：TableView（選択ディレクトリのファイル一覧表示用）
 					TableView{
 						AssignTo:           &tableView,
-						StretchFactor:      5, // 左右の比率
+						StretchFactor:      5,
 						AlwaysConsumeSpace: true,
 						CheckBoxes:         true,
 						Columns: []TableViewColumn{
@@ -129,30 +145,46 @@ func CreateMainWindow() {
 					PushButton{
 						Text: "削除",
 						OnClicked: func() {
-							// 削除確認ダイアログを表示
-							if walk.MsgBox(mw, "確認", "削除フラグが付いたファイルを削除しますか？", walk.MsgBoxIconQuestion|walk.MsgBoxYesNo) == walk.DlgCmdYes {
-								// 削除処理を実行
-								if currentZipPath != "" {
-									err := fileops.DeleteFlaggedFiles(currentZipPath)
+							if currentZipPath == "" {
+								return
+							}
+							// すでに削除中なら実行しない
+							if fileListModel.IsDeleting(currentZipPath) {
+								walk.MsgBox(mw, "情報", "現在選択中のZIPは削除処理中です。完了までお待ちください。", walk.MsgBoxIconInformation)
+								return
+							}
+							// 確認
+							if walk.MsgBox(mw, "確認", "削除フラグが付いたファイルを削除しますか？", walk.MsgBoxIconQuestion|walk.MsgBoxYesNo) != walk.DlgCmdYes {
+								return
+							}
+							// 削除対象のパスをキャプチャ
+							targetZip := currentZipPath
+							// 左ペインに削除中を表示
+							fileListModel.SetDeleting(targetZip, true)
+							// 非同期処理開始（並列可）
+							go func() {
+								err := fileops.DeleteFlaggedFiles(targetZip)
+								// UIスレッドで更新
+								mw.Synchronize(func() {
+									// 状態解除
+									fileListModel.SetDeleting(targetZip, false)
 									if err != nil {
 										walk.MsgBox(mw, "エラー", "ファイルの削除に失敗しました: "+err.Error(), walk.MsgBoxIconError)
 										return
 									}
-
-									// 削除成功メッセージを表示
-									walk.MsgBox(mw, "完了", "削除フラグが付いたファイルを削除しました", walk.MsgBoxIconInformation)
-
-									// ZIPファイルを再読み込み
-									zipModel, err = model.LoadZipFile(currentZipPath)
-									if err != nil {
-										walk.MsgBox(mw, "エラー", "ZIPファイルの再読み込みに失敗しました: "+err.Error(), walk.MsgBoxIconError)
-										return
+									// 成功時はダイアログを表示しない
+									// 現在選択中が対象ZIPなら再読み込み
+									if currentZipPath == targetZip {
+										var loadErr error
+										zipModel, loadErr = model.LoadZipFile(targetZip)
+										if loadErr != nil {
+											walk.MsgBox(mw, "エラー", "ZIPファイルの再読み込みに失敗しました: "+loadErr.Error(), walk.MsgBoxIconError)
+											return
+										}
+										tv.SetModel(zipModel)
 									}
-
-									// ツリービューにモデルを設定
-									tv.SetModel(zipModel)
-								}
-							}
+								})
+							}()
 						},
 					},
 				},
@@ -165,28 +197,48 @@ func CreateMainWindow() {
 	// ツリービューにコンテキストメニューを設定
 	tv.SetContextMenu(treeContextMenu)
 
-	// ドロップイベントを処理
+	// 左ペインのモデルを設定
+	fileListView.SetModel(fileListModel)
+
+	// ドロップイベントを処理（D&DされたZIPを左の一覧に追加）
 	mw.DropFiles().Attach(func(files []string) {
 		for _, file := range files {
-			// ZIPファイルかどうかを確認
 			if filepath.Ext(file) == ".zip" {
-				// ZIPファイルを読み込む
-				var err error
-				currentZipPath = file
-				zipModel, err = model.LoadZipFile(file)
-				if err != nil {
-					walk.MsgBox(mw, "エラー", "ZIPファイルの読み込みに失敗しました: "+err.Error(), walk.MsgBoxIconError)
-					return
-				}
-
-				// ツリービューにモデルを設定
-				tv.SetModel(zipModel)
-
-				// ウィンドウタイトルを更新
-				mw.SetTitle("ZIP ファイルビューア - " + filepath.Base(file))
-				break
+				fileListModel.AddPath(file)
 			}
 		}
+	})
+
+	// 左側のZIPファイル一覧の選択変更で読み込み
+	fileListView.CurrentIndexChanged().Attach(func() {
+		idx := fileListView.CurrentIndex()
+		if idx < 0 {
+			return
+		}
+		path := fileListModel.PathAt(idx)
+		if path == "" {
+			return
+		}
+		// 削除中は開かない
+		if fileListModel.IsDeleting(path) {
+			// 元に戻す
+			if lastFileListIndex >= 0 && lastFileListIndex < fileListView.Model().(interface{ RowCount() int }).RowCount() {
+				fileListView.SetCurrentIndex(lastFileListIndex)
+			}
+			walk.MsgBox(mw, "情報", "このZIPは削除処理中のため開けません。", walk.MsgBoxIconInformation)
+			return
+		}
+		// 正常読み込み
+		var err error
+		currentZipPath = path
+		zipModel, err = model.LoadZipFile(path)
+		if err != nil {
+			walk.MsgBox(mw, "エラー", "ZIPファイルの読み込みに失敗しました: "+err.Error(), walk.MsgBoxIconError)
+			return
+		}
+		tv.SetModel(zipModel)
+		mw.SetTitle("ZIP ファイルビューア - " + filepath.Base(path))
+		lastFileListIndex = idx
 	})
 
 	// ツリービューの選択変更イベントを処理
@@ -210,21 +262,34 @@ func CreateMainWindow() {
 
 	// アイテムがダブルクリックされたときの処理（ファイルを開くなどの操作を追加できる）
 	tableView.ItemActivated().Attach(func() {
-		// 現在選択されているツリーアイテムを取得
-		treeItem := tv.CurrentItem()
-		if _, ok := treeItem.(*model.ZipTreeItem); ok {
-			// 選択された行のインデックスを取得
-			indexes := tableView.SelectedIndexes()
-			if len(indexes) > 0 {
-				// ここにファイルを開くなどの処理を追加できる
-				// 例:
-				// row := indexes[0]
-				// model := tableView.Model().(*model.FileItemModel)
-				// if row >= 0 && row < len(model.Items) {
-				//     item := model.Items[row]
-				//     walk.MsgBox(mw, "ファイル", item.GetName() + "が選択されました", walk.MsgBoxIconInformation)
-				// }
-			}
+		// 現在選択されているツリーアイテム（右側はファイル一覧なのでディレクトリ配下）
+		if tv.CurrentItem() == nil || currentZipPath == "" {
+			return
+		}
+
+		row := tableView.CurrentIndex()
+		if row < 0 {
+			return
+		}
+		m, ok := tableView.Model().(*model.FileItemModel)
+		if !ok || row < 0 || row >= len(m.Items) {
+			return
+		}
+		fileItem := m.Items[row]
+
+		// 一時フォルダに展開
+		extractedPath, err := fileops.ExtractFileToTemp(currentZipPath, fileItem.GetPath())
+		if err != nil {
+			walk.MsgBox(mw, "エラー", "ファイルの展開に失敗しました: "+err.Error(), walk.MsgBoxIconError)
+			return
+		}
+
+		// 既定のアプリケーションで開く（Windowsの関連付け）
+		// cmd /C start "" <path>
+		cmd := exec.Command("cmd", "/C", "start", "", extractedPath)
+		if err := cmd.Start(); err != nil {
+			walk.MsgBox(mw, "エラー", "ファイルを開けませんでした: "+err.Error(), walk.MsgBoxIconError)
+			return
 		}
 	})
 

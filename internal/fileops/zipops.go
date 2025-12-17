@@ -2,12 +2,14 @@ package fileops
 
 import (
 	"archive/zip"
-	"github.com/lxn/walk"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"zip-editor/internal/common"
 	"zip-editor/internal/model"
+
+	"github.com/lxn/walk"
 )
 
 // deleteFlags は削除フラグの状態を保持するマップ
@@ -187,4 +189,66 @@ func UpdateFileList(tv *walk.TableView, treeItem *model.ZipTreeItem) error {
 	tv.SetModel(fileModel)
 
 	return nil
+}
+
+// ExtractFileToTemp は指定したZIP内の単一ファイルを一時ディレクトリに展開し、そのパスを返します
+// エンコーディングは自動検出し、UTF-8のパス（model側と同一ロジック）でマッチングします
+func ExtractFileToTemp(zipPath, entryUTF8Path string) (string, error) {
+	// 一時ディレクトリを作成（規約に従いプレフィックスを使用）
+	tempDir, err := os.MkdirTemp("", "zip-editor-")
+	if err != nil {
+		return "", err
+	}
+
+	// ZIPを開く
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close()
+
+	// エントリを探索
+	var target *zip.File
+	for _, f := range reader.File {
+		// ZIP内パスのエンコーディングをUTF-8へ
+		utf8Path := common.AutoDetectEncoding(f.Name)
+		if utf8Path == entryUTF8Path {
+			target = f
+			break
+		}
+	}
+	if target == nil {
+		return "", os.ErrNotExist
+	}
+
+	// 出力先フルパス（Zip内のサブディレクトリ構造を維持）
+	rel := filepath.FromSlash(entryUTF8Path)
+	// 先頭にスラッシュがあれば削除
+	rel = strings.TrimLeft(rel, "\\/")
+	outPath := filepath.Join(tempDir, rel)
+
+	// 親ディレクトリを作成
+	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+		return "", err
+	}
+
+	// ファイルを展開
+	rc, err := target.Open()
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return "", err
+	}
+	defer outFile.Close()
+
+	if _, err := io.Copy(outFile, rc); err != nil {
+		return "", err
+	}
+
+	// 正常終了
+	return outPath, nil
 }
