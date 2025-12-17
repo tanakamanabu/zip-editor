@@ -80,13 +80,18 @@ func CreateMainWindow() {
 			HSplitter{
 				StretchFactor: 10,
 				Children: []Widget{
-					// 左側：ZIPファイル一覧（TableView）
-					TableView{
-						AssignTo:           &fileListView,
-						StretchFactor:      3,
-						AlwaysConsumeSpace: true,
-						Columns: []TableViewColumn{
-							{Title: "ファイル"}, // ファイル名のみ表示
+					Composite{
+						StretchFactor: 0,
+						Layout:        VBox{MarginsZero: true},
+						Children: []Widget{
+							// 中身：ZIPファイル一覧（TableView）
+							TableView{
+								AssignTo:           &fileListView,
+								AlwaysConsumeSpace: true,
+								Columns: []TableViewColumn{
+									{Title: "ファイル"}, // ファイル名のみ表示
+								},
+							},
 						},
 					},
 					// 中央：ツリービュー
