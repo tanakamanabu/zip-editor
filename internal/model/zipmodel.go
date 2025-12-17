@@ -1,11 +1,12 @@
 package model
 
 import (
-	"archive/zip"
-	"path/filepath"
-	"strings"
-	"time"
-	"zip-editor/internal/common"
+    "archive/zip"
+    "os"
+    "path/filepath"
+    "strings"
+    "time"
+    "zip-editor/internal/common"
 
 	"github.com/lxn/walk"
 )
@@ -94,9 +95,17 @@ func (item *ZipTreeItem) Image() interface{} {
 
 // ZipTreeModel はZIPファイルのツリーモデルを表します
 type ZipTreeModel struct {
-	walk.TreeModelBase
-	rootItem *ZipTreeItem
+    walk.TreeModelBase
+    rootItem *ZipTreeItem
+    // 元ZIPファイルのパス
+    zipPath string
+    // 元ZIPファイルの最終更新時刻
+    zipModTime time.Time
 }
+
+// zipModelCache は読み込んだZIPファイルのツリーモデルをキャッシュします（連想配列）
+// キー: ZIPファイルのパス、値: ZipTreeModel（ファイルの更新日時を保持）
+var zipModelCache = make(map[string]*ZipTreeModel)
 
 // PublishItemChanged はアイテムが変更されたことを通知します
 // 注意: この実装は簡略化されており、実際のイベント通知は行われません
@@ -120,13 +129,29 @@ func (m *ZipTreeModel) RootAt(index int) walk.TreeItem {
 	return m.rootItem
 }
 
-// LoadZipFile はZIPファイルを読み込み、ツリーモデルを作成します
+// LoadZipFile はZIPファイルを読み込み、ツリーモデルを作成します。
+// 同じZIPファイルが読み込まれ、かつファイルの更新日時が変わっていない場合は
+// キャッシュ済みのモデルを返します。
 func LoadZipFile(filePath string) (*ZipTreeModel, error) {
-	reader, err := zip.OpenReader(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
+    // ZIPファイルの更新日時を取得
+    fi, err := os.Stat(filePath)
+    if err != nil {
+        return nil, err
+    }
+    modTime := fi.ModTime()
+
+    // キャッシュに存在し、更新日時が同一ならキャッシュを返す
+    if cached, ok := zipModelCache[filePath]; ok {
+        if cached.zipModTime.Equal(modTime) {
+            return cached, nil
+        }
+    }
+
+    reader, err := zip.OpenReader(filePath)
+    if err != nil {
+        return nil, err
+    }
+    defer reader.Close()
 
 	// ZIPファイル名でルートアイテムを作成
 	rootItem := &ZipTreeItem{
@@ -173,7 +198,16 @@ func LoadZipFile(filePath string) (*ZipTreeModel, error) {
 		parentItem.files = append(parentItem.files, fileItem)
 	}
 
-	return &ZipTreeModel{rootItem: rootItem}, nil
+    model := &ZipTreeModel{
+        rootItem:   rootItem,
+        zipPath:    filePath,
+        zipModTime: modTime,
+    }
+
+    // キャッシュへ保存
+    zipModelCache[filePath] = model
+
+    return model, nil
 }
 
 // createDirectoryPath はパスに基づいてディレクトリ構造を作成し、最後のディレクトリアイテムを返します
