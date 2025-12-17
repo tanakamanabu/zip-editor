@@ -14,21 +14,21 @@ import (
 
 // CreateMainWindow はメインウィンドウを作成し、表示します
 func CreateMainWindow() {
-	// メインウィンドウを作成
-	mw := new(walk.MainWindow)
-	var tableView *walk.TableView    // 右側：ディレクトリ内のファイル一覧
-	var fileListView *walk.TableView // 左側：ZIPファイル一覧
-	var tv *walk.TreeView
+ // メインウィンドウを作成
+ mw := new(walk.MainWindow)
+ var tableView *walk.TableView    // 右側：ディレクトリ内のファイル一覧
+ var fileListView *walk.TableView // 左側：ZIPファイル一覧
+ var tv *walk.TreeView
 
 	// 現在のZIPファイルパスとモデル
 	var currentZipPath string
 	var zipModel *model.ZipTreeModel
 
-	// ツリービュー用のコンテキストメニューを作成
-	treeContextMenu, err := walk.NewMenu()
-	if err != nil {
-		log.Fatal(err)
-	}
+ // ツリービュー用のコンテキストメニューを作成
+ treeContextMenu, err := walk.NewMenu()
+ if err != nil {
+     log.Fatal(err)
+ }
 
 	// 削除メニュー項目を追加
 	deleteAction := walk.NewAction()
@@ -69,12 +69,33 @@ func CreateMainWindow() {
 	// 左ペインの前回選択インデックス
 	lastFileListIndex := -1
 
-	// メインウィンドウを設定
-	if err := (MainWindow{
-		AssignTo: &mw,
-		Title:    "ZIP ファイルビューア",
-		MinSize:  Size{Width: 700, Height: 400},
-		Layout:   VBox{},
+ // ツリーを全展開するヘルパー関数
+ // 注意: 大きなZIPでは処理に時間がかかる可能性があります。
+ expandAllTree := func() {
+     if zipModel == nil || tv == nil {
+         return
+     }
+     // ルートを取得し再帰的に展開
+     if rootItem, ok := zipModel.RootAt(0).(*model.ZipTreeItem); ok {
+         var expandRec func(item *model.ZipTreeItem)
+         expandRec = func(item *model.ZipTreeItem) {
+             // 該当ノードを展開
+             _ = tv.SetExpanded(item, true)
+             // 子ディレクトリを再帰的に展開
+             for _, ch := range item.GetChildren() {
+                 expandRec(ch)
+             }
+         }
+         expandRec(rootItem)
+     }
+ }
+
+ // メインウィンドウを設定
+ if err := (MainWindow{
+     AssignTo: &mw,
+     Title:    "ZIP ファイルビューア",
+     MinSize:  Size{Width: 700, Height: 400},
+     Layout:   VBox{},
 		Children: []Widget{
 			// 水平分割レイアウト
 			HSplitter{
@@ -186,12 +207,14 @@ func CreateMainWindow() {
 											walk.MsgBox(mw, "エラー", "ZIPファイルの再読み込みに失敗しました: "+loadErr.Error(), walk.MsgBoxIconError)
 											return
 										}
-										tv.SetModel(zipModel)
-									}
-								})
-							}()
-						},
-					},
+                                        tv.SetModel(zipModel)
+                                        // ZIP 再読み込み時もツリーを全展開
+                                        expandAllTree()
+                                    }
+                                })
+                            }()
+                        },
+                    },
 				},
 			},
 		},
@@ -236,15 +259,17 @@ func CreateMainWindow() {
 		// 正常読み込み
 		var err error
 		currentZipPath = path
-		zipModel, err = model.LoadZipFile(path)
-		if err != nil {
-			walk.MsgBox(mw, "エラー", "ZIPファイルの読み込みに失敗しました: "+err.Error(), walk.MsgBoxIconError)
-			return
-		}
-		tv.SetModel(zipModel)
-		mw.SetTitle("ZIP ファイルビューア - " + filepath.Base(path))
-		lastFileListIndex = idx
-	})
+        zipModel, err = model.LoadZipFile(path)
+        if err != nil {
+            walk.MsgBox(mw, "エラー", "ZIPファイルの読み込みに失敗しました: "+err.Error(), walk.MsgBoxIconError)
+            return
+        }
+        tv.SetModel(zipModel)
+        // ZIPを開いた直後にツリーを全展開
+        expandAllTree()
+        mw.SetTitle("ZIP ファイルビューア - " + filepath.Base(path))
+        lastFileListIndex = idx
+    })
 
 	// ツリービューの選択変更イベントを処理
 	tv.CurrentItemChanged().Attach(func() {
